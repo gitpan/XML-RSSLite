@@ -1,5 +1,12 @@
 Revision history for Perl extension XML::RSSLite.
 
+0.11	Mon Feb 24 06:25:54 UTC 2003
+	Vast speed and memory requirement improvements for deep structures.
+
+	Fixed bug where attributes of a tag with no content were dropped.
+
+	Fixed buglet where "empty" (all whitespace) content was added to tree.
+
 0.10	Sun Feb 23 02:26:04 UTC 2003
 	Rewrote the parser, subsequently squashing bugs, and future-proofing.
 

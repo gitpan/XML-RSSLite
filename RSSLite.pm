@@ -3,7 +3,7 @@ package XML::RSSLite;
 use strict;
 use vars qw($VERSION);
 
-$VERSION = 0.10;
+$VERSION = 0.11;
 
 sub import{
   no strict 'refs';
@@ -38,8 +38,8 @@ sub preprocess {
   my $cref = shift;
   $$cref =~ y/\r\n/\n/s;
   $$cref =~ y{\n\t ~0-9\-+!@#$%^&*()_=a-zA-Z[]\\;':",./<>?}{ }cs;
-#XXX  $$cref =~ s/&(?!0[a-zA-Z0-9]+|#\d+);/amp/gs;
-#XXX Do we wish to (re)allow escaped HTML?!
+  #XXX $$cref =~ s/&(?!0[a-zA-Z0-9]+|#\d+);/amp/gs;
+  #XXX Do we wish to (re)allow escaped HTML?!
   $$cref =~ s{(?:<|&lt;)/?(?:b|i|h\d|p|center|quote|strong)(?:>|&gt;)}{}gsi;
 }
 
@@ -203,6 +203,23 @@ sub parseXML{
       if $comments;
   }
 
+  _parseXML($hash, $xml, $tag);
+
+#  #XXX Context of comment is lost!
+#  #Expose comments if requested
+#  do{ push(@$comments, $_->[1]) for @comments } if ref($comments) eq 'ARRAY';
+  if( $comments ){
+    #Restore comments if requested
+    substr(${$xml}, $_->[0], 0, '<!--'.$_->[1].'-->') for @comments;
+
+    #Expose comments if requested
+    do{ push(@$comments, $_->[1]) for @comments } if ref($comments) eq 'ARRAY';
+  }
+}
+
+sub _parseXML{
+  my($hash, $xml, $tag, $index) = @_;
+  my($begin, $end);
 
   #Find topTag and set pos to start matching from there
   ${$xml} =~ /<$tag(?:>|\s)/g;
@@ -221,9 +238,10 @@ sub parseXML{
     my $str = substr(${$xml}, $begin, $end-$begin);
     
     #Extract the actual attributes and contents of the tag
-#   $str =~ m%<$tag\s*([^>]*?)?>(.*?)</$tag>%s ||
-    $str =~ s%^.*?<$tag\s*([^>]*?)?>(.*?)</$tag>%<$tag>$2</$tag>%s ||
-      $str =~ m%<$tag\s*([^>]*?)?\s*/>%;
+   $str =~ m%<\Q$tag\E\s*([^>]*?)?>(.*?)</\Q$tag\E>%s ||
+#XXX pointed out by hv
+#    $str =~ s%^.*?<$tag\s*([^>]*?)?>(.*?)</$tag>%<$tag>$2</$tag>%s ||
+      $str =~ m%<\Q$tag\E\s*([^>]*?)?\s*/>%;
     my($attr, $content) = ($1, $2);
 
     #Did we get attributes? clean them up and chuck them in a hash.
@@ -232,45 +250,39 @@ sub parseXML{
       $attr->{$1} = $3 while m/([^\s=]+)\s*=\s*(['"])(.*?)\2/g;
     }
 
+    my $inhash;
     #Recurse if contents has more tags, replace contents with reference we get
     if( $content && index($content, '<') > -1 ){
-      parseXML($content={}, \$str, $tag, 0);
+      _parseXML($inhash={}, \$str, $tag);
       #Was there any data in the contents? We should extract that...
-#      if( $str =~ />[^><\s]+</ || $str =~ />(?:[^><\s]+\s+)+</ ){
       if( $str =~ />[^><]+</ ){
-	#The odd RE above \S+\s+ shortcircuits unnecessary entry
-
-	my $length = length($str);
-	my $taglen = length($tag)+2;
-	$str= substr($str, $taglen, $length-1-2*$taglen);
+	#The odd RE above shortcircuits unnecessary entry
 
 	#Clean whitespace between tags
 	#$str =~ s%(?<=>)?\s*(?=<)%%g; #XXX ~same speed, wacko warning
 	#$str =~ s%(>?)\s*<%$1<%g;
+#XXX    #$str =~ s%(?:^|(?<=>))\s*(?:(?=<)|\z)%%g
 
-#	$str =~ s%<$_\s*(?:[^>]*?)?(?:/|>.*?</$_)>%%sg for keys %{$content};
-	my $qr = qr{@{[join('|', keys %{$content})]}};
-	$str =~ s%<($qr)\s*(?:[^>]*?)?(?:/|>.*?</\1)>%%sg;
+	my $qr = qr{@{[join('|', keys %{$inhash})]}};
+	$content =~ s%<($qr)\s*(?:[^>]*?)?(?:/|>.*?</\1)>%%sg;
 
-	$content->{'<>'} = $str;#XXX if $str;
+	$inhash->{'<>'} = $content if $content =~ /\S/;
       }
     }
 
-    my($inhash);
-    if( ref($content) ){
-      #We have attributes? Then we should save them.
-      $inhash = $attr || {};
-
-      #Contents too? Save them as well.
-      if( $content ){
-	for( keys %{$content} ){
+    if( ref($inhash) ){
+      #We have attributes? Then we should merge them.
+      if( ref($attr) ){
+	for( keys %{$attr} ){
 	  $inhash->{$_} = exists($inhash->{$_})   ?
 	    (ref($inhash->{$_})  eq 'ARRAY'       ?
-	     [@{$inhash->{$_}}, $content->{$_}]   :
-	     [  $inhash->{$_},  $content->{$_}] ) : $content->{$_};
+	     [@{$inhash->{$_}}, $attr->{$_}]   :
+	     [  $inhash->{$_},  $attr->{$_}] ) : $attr->{$_};
 	}
-	
       }
+    }
+    elsif( ref($attr) ){
+      $inhash = $attr;
     }
     else{
       #Otherwise save our content
@@ -281,14 +293,6 @@ sub parseXML{
       (ref($hash->{$tag})  eq 'ARRAY'     ?
 	[@{$hash->{$tag}}, $inhash]       :
 	[  $hash->{$tag},  $inhash]  )    : $inhash;
-  }
-
-  if( $comments ){
-    #Restore comments if requested
-    substr(${$xml}, $_->[0], 0, '<!--'.$_->[1].'-->') for @comments;
-
-    #Expose comments if requested
-    do{ push(@$comments, $_->[1]) for @comments } if ref($comments) eq 'ARRAY';
   }
 }
 
@@ -364,13 +368,6 @@ I<$inScalarRef> is a reference to a scalar containing the document to be
 parsed, the contents will effectively be destroyed. I<$outHashRef> is a
 reference to the hash within which to store the parsed content.
 
-
-XXX
-=item usableXML($inScalarRef)
-
-Test whether or not B<XML::RSSLite> understands the content of the referenced
-document.
-
 =back
 
 =head2 EXPORTABLE
@@ -379,29 +376,27 @@ document.
 
 =item parseXML(\%parsedTree, \$parseThis, 'topTag', $comments);
 
-=head1 DESCRIPTION
-
 =over
 
 =item parsedTree - required
 
-reference to hash to store the parsed document within
+Reference to hash to store the parsed document within.
 
 =item parseThis  - required
 
-reference to scalar containing the document to parse
+Reference to scalar containing the document to parse.
 
 =item topTag     - optional
 
-tag to consider the root node, leaving this undefined is not recommended.
+Tag to consider the root node, leaving this undefined is not recommended.
 
 =item comments   - optional
 
 =over
 
-=item false will remove contents from
+=item false will remove contents from parseThis
 
-=item true will not remove comments
+=item true will not remove comments from parseThis
 
 =item array reference is true, comments are stored here
 
@@ -441,7 +436,7 @@ It's non-validating, without a DTD the following cannot be properly addressed
 
 =item namespaces
 
-This might arriving in the next release.
+This might be arriving in the next release.
 
 =back
 
