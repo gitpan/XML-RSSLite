@@ -1,5 +1,15 @@
 Revision history for Perl extension XML::RSSLite.
 
+0.10	Sun Feb 23 02:26:04 UTC 2003
+	Rewrote the parser, subsequently squashing bugs, and future-proofing.
+
+	THIS VERSION BREAKS BACKWARDS COMPATIBILITY
+	It is very similar and should require only minor changes,
+	but it is not a drop-in upgrade. See the README.
+
+	Fixed a bug resulting from a lack of DWIM;
+	'+', '-', and '9' were being stripped from the RSS feed
+
 0.08	Wed May  1 02:51:51 UTC 2002
 
 	Improved efficiency of parseXML, also allow [ and ]

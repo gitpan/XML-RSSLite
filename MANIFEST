@@ -3,4 +3,7 @@ MANIFEST
 TODO
 Makefile.PL
 RSSLite.pm
-test.pl
+t/01basic.t
+t/02rss.t
+t/journal.rss
+t/sampleRSS.xml
