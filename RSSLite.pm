@@ -3,7 +3,7 @@ package XML::RSSLite;
 use strict;
 use vars qw($VERSION);
 
-$VERSION = 0.11;
+$VERSION = 0.15;
 
 sub import{
   no strict 'refs';
@@ -143,10 +143,10 @@ sub postprocess {
       # See if you can use misplaced url in title for empty links
       elsif( exists($i->{'title'}) ){
 	# The next case would trap this, but try to short-circuit the gathering
-	if ($i->{'title'} =~ /^(?:ht)|ftp:/) {
+	if ($i->{'title'} =~ /^(?:https?|ftp):/) {
 	  $i->{'link'} = $i->{'title'};
 	}
-	elsif ($i->{'title'} =~ /"((?:ht)|ftp.*?)"/) {
+	elsif ($i->{'title'} =~ /"((?:https?|ftp).*?)"/) {
 	  $i->{'link'} = $1;
 	  $i->{'title'} =~ s/<.*?>//;
 	}
@@ -156,15 +156,16 @@ sub postprocess {
       }
     }
     
+    # Clean bogus whitespace
+    $i->{'link'} =~ s/^\s+|\s+$//;
+
     # Make sure you've got an http/ftp link
-    if( exists( $i->{'link'}) && $i->{'link'} !~ m{^(http|ftp)://}i) {
+    if( exists( $i->{'link'}) && $i->{'link'} !~ m{^(https?|ftp)://}i) {
       ## Rip link out of anchor tag
-      $i->{'link'} =~ m{a\s+href=("|&quot;)?(.*?)("|>|&quot;|&gt;)?}i;
-      if( $2 ){
-	$i->{'link'} = $2;
-      }
-      elsif( $i->{'link'}  =~ m{[\.#/]}i and $rr->{'link'} =~ m{^http://} ){
-	## Smells like a relative url
+      if( ref($i->{'link'}) && $i->{'link'}->{a}->{href} ){
+	$i->{'link'} = $i->{'link'}->{a}->{href} }
+      ## Smells like a relative url
+      elsif( $i->{'link'}  =~ m{^[#/]} and $rr->{'link'} =~ m{^https?://} ){
 	if (substr($i->{'link'}, 0, 1) ne '/') {
 	  $i->{'link'} = '/' . $i->{'link'};
 	}
@@ -247,7 +248,7 @@ sub _parseXML{
     #Did we get attributes? clean them up and chuck them in a hash.
     if( $attr ){
       ($_, $attr) = ($attr, {});
-      $attr->{$1} = $3 while m/([^\s=]+)\s*=\s*(['"])(.*?)\2/g;
+      $attr->{$1} = $3 while m/([^\s=]+)\s*=\s*(['"]?)([^\2>]*?)(?:\2|$)/g;
     }
 
     my $inhash;
@@ -346,15 +347,17 @@ output for best results. The munging includes:
 
 =item Remove characters other than 0-9~!@#$%^&*()-+=a-zA-Z[];',.:"<>?\s
 
+=item Remove leading whitespace from URIs
+
 =item Use <url> tags when <link> is empty
 
 =item Use misplaced urls in <title> when <link> is empty 
 
 =item Exract links from <a href=...> if required   
 
-=item Limit links to ftp and http
+=item Limit links to ftp and http(s)
 
-=item Join relative urls to the site base
+=item Join relative item urls (beginning with / or #) to the site base
 
 =back
 
@@ -436,7 +439,7 @@ It's non-validating, without a DTD the following cannot be properly addressed
 
 =item namespaces
 
-This might be arriving in the next release.
+This may or may not be arriving in some future release.
 
 =back
 
@@ -455,7 +458,7 @@ Scott Thomason <scott@thomasons.org>
 
 =head1 LICENSE
 
-Portions Copyright (c) 2002 Jerrad Pierce, (c) 2000 Scott Thomason.
+Portions Copyright (c) 2002,2003,2009 Jerrad Pierce, (c) 2000 Scott Thomason.
 All rights reserved. This program is free software; you can redistribute it 
 and/or modify it under the same terms as Perl itself.
 

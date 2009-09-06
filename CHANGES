@@ -1,5 +1,16 @@
 Revision history for Perl extension XML::RSSLite.
 
+0.15	Sat Sep  5 23:25:51 EDT 2009
+	Strip bracketing whitespace from links
+
+	Support SSL links
+
+	Fix(?) relative URI munging, broken since at least 0.06
+
+	Fixed HTML anchor in item link munging, broken since at least 0.06
+
+	Fixed title URI to link if latter is missing, broken since at least 0.06
+
 0.11	Mon Feb 24 06:25:54 UTC 2003
 	Vast speed and memory requirement improvements for deep structures.
 
